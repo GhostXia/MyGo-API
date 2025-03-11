@@ -1,0 +1,35 @@
+{
+  "auth_token": "your-auth-token-here",
+  "http_proxy": "",
+  "port": 8080,
+  "base_url": "https://api.example.com",
+  "timeout": 30000000000,
+  "retry_count": 3,
+  "config_flags": {
+    "debug": false,
+    "verbose": false
+  },
+  "models": [
+    "generic-model",
+    "advanced-model",
+    "specialized-model"
+  ],
+  "rate_limit": 60,
+  "cache_size": 1000,
+  "cors": {
+    "allowed_origins": ["*"],
+    "allowed_methods": ["GET", "POST", "OPTIONS"],
+    "allowed_headers": ["Content-Type", "Authorization"],
+    "max_age": 86400
+  },
+  "logging": {
+    "level": "info",
+    "file": "",
+    "format": "text"
+  },
+  "tls": {
+    "enabled": false,
+    "cert_file": "",
+    "key_file": ""
+  }
+}
