@@ -14,6 +14,7 @@
 - 响应缓存机制提高性能
 - 支持配置文件和命令行参数
 - 支持多种模型
+- 支持基于Cookie的认证机制
 
 ## 安装与使用
 
@@ -77,6 +78,88 @@ go run My.go --token "your-token" --port 8080 --proxy "http://your-proxy-url"
 ### 2. 模型列表 - /v1/models
 
 返回可用模型列表。
+
+### 3. Cookie管理 API
+
+当启用Cookie认证时，以下端点可用于管理Cookie：
+
+#### 3.1 获取Cookie列表 - /v1/cookies
+
+获取指定服务的所有Cookie。
+
+**请求参数:**
+- `service` (可选): 服务名称，默认使用配置中的服务名称
+
+**响应示例:**
+
+```json
+{
+  "success": true,
+  "message": "Cookies retrieved successfully",
+  "data": [
+    {
+      "name": "session_id",
+      "domain": "api.example.com",
+      "path": "/",
+      "expires": "2023-12-31T23:59:59Z",
+      "secure": true,
+      "http_only": true,
+      "same_site": "lax"
+    }
+  ]
+}
+```
+
+#### 3.2 添加Cookie - /v1/cookies/add
+
+添加或更新Cookie。
+
+**请求体示例:**
+
+```json
+{
+  "name": "session_id",
+  "value": "your-session-value",
+  "domain": "api.example.com",
+  "path": "/",
+  "max_age": 86400,
+  "secure": true,
+  "http_only": true,
+  "same_site": "lax"
+}
+```
+
+**响应示例:**
+
+```json
+{
+  "success": true,
+  "message": "Cookie added successfully"
+}
+```
+
+#### 3.3 删除Cookie - /v1/cookies/delete
+
+删除指定的Cookie。
+
+**请求体示例:**
+
+```json
+{
+  "name": "session_id",
+  "domain": "api.example.com",
+  "path": "/"
+}
+```
+
+**响应示例:**
+
+```json
+{
+  "success": true,
+  "message": "Cookie deleted successfully"
+}
+```
 
 ## 自定义与扩展
 

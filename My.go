@@ -29,6 +29,8 @@ type Client struct {
 	timeout     time.Duration     // 请求超时时间
 	retryCount  int               // 重试次数
 	logger      *log.Logger       // 日志记录器
+	cookieJar   *CookieJar        // Cookie 管理器
+	serviceName string            // 服务名称，用于 Cookie 认证
 }
 
 // ClientOption 定义客户端配置选项函数类型
@@ -62,6 +64,14 @@ func WithLogger(logger *log.Logger) ClientOption {
 	}
 }
 
+// WithCookieJar 设置客户端Cookie管理器
+func WithCookieJar(jar *CookieJar, serviceName string) ClientOption {
+	return func(c *Client) {
+		c.cookieJar = jar
+		c.serviceName = serviceName
+	}
+}
+
 // NewClient 创建一个新的客户端实例
 func NewClient(authToken string, configFlags map[string]bool, options ...ClientOption) *Client {
 	client := &Client{
@@ -76,6 +86,8 @@ func NewClient(authToken string, configFlags map[string]bool, options ...ClientO
 		timeout:     30 * time.Second,
 		retryCount:  3,
 		logger:      log.New(os.Stdout, "[API Client] ", log.LstdFlags),
+		cookieJar:   nil,
+		serviceName: "default",
 	}
 
 	// 应用自定义选项
@@ -130,8 +142,18 @@ func (c *Client) sendRequest(message string, stream bool) (io.ReadCloser, error)
 		return nil, fmt.Errorf("failed to create request: %v", err)
 	}
 
+	// 设置请求头
 	for key, value := range c.headers {
 		req.Header.Set(key, value)
+	}
+
+	// 如果启用了Cookie认证，应用Cookie到请求
+	if c.cookieJar != nil {
+		c.cookieJar.ApplyToRequest(c.serviceName, req)
+		// 当使用Cookie认证时，可以选择不发送Authorization头
+		if config.CookieAuth.Enabled {
+			req.Header.Del("Authorization")
+		}
 	}
 
 	// 创建带超时的HTTP客户端
@@ -162,6 +184,10 @@ func (c *Client) sendRequest(message string, stream bool) (io.ReadCloser, error)
 
 		resp, err = client.Do(req)
 		if err == nil && resp.StatusCode < 500 {
+			// 如果启用了Cookie认证，从响应中提取Cookie
+			if c.cookieJar != nil {
+				c.cookieJar.ExtractFromResponse(c.serviceName, resp)
+			}
 			break // 成功或客户端错误不需要重试
 		}
 
@@ -457,6 +483,15 @@ type Config struct {
 	Models      []string          `json:"models"`
 	RateLimit   int               `json:"rate_limit"`
 	CacheSize   int               `json:"cache_size"`
+	CookieAuth  CookieAuthConfig  `json:"cookie_auth"`
+}
+
+// CookieAuthConfig 定义Cookie认证配置
+type CookieAuthConfig struct {
+	Enabled         bool     `json:"enabled"`          // 是否启用Cookie认证
+	CookieFile      string   `json:"cookie_file"`      // Cookie文件路径
+	ServiceName     string   `json:"service_name"`     // 服务名称
+	RequiredCookies []string `json:"required_cookies"` // 必需的Cookie名称列表
 }
 
 // 全局变量
@@ -469,6 +504,7 @@ var (
 	configFlags = map[string]bool{} // 可通过命令行参数设置
 	config      Config
 	requestCache = cache.New(5*time.Minute, 10*time.Minute) // 简单的内存缓存
+	cookieJar   *CookieJar // Cookie管理器
 )
 
 // handleChatCompletion 处理 /v1/chat/completions 端点的请求
@@ -478,8 +514,8 @@ func handleChatCompletion(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// 认证
-	if r.Header.Get("Authorization") != "Bearer "+config.AuthToken {
+	// 认证（仅当未启用Cookie认证时检查令牌）
+	if !config.CookieAuth.Enabled && r.Header.Get("Authorization") != "Bearer "+config.AuthToken {
 		http.Error(w, "Unauthorized", http.StatusUnauthorized)
 		return
 	}
@@ -595,8 +631,8 @@ func listModels(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	
-	// 认证
-	if r.Header.Get("Authorization") != "Bearer "+config.AuthToken {
+	// 认证（仅当未启用Cookie认证时检查令牌）
+	if !config.CookieAuth.Enabled && r.Header.Get("Authorization") != "Bearer "+config.AuthToken {
 		http.Error(w, "Unauthorized", http.StatusUnauthorized)
 		return
 	}
@@ -718,6 +754,14 @@ func main() {
 	if *port != 8080 {
 		config.Port = *port
 	}
+	
+	// 初始化Cookie管理器（如果启用）
+	if config.CookieAuth.Enabled {
+		cookieJar, err = NewCookieJar(config.CookieAuth.CookieFile)
+		if err != nil {
+			log.Printf("初始化Cookie管理器失败: %v，将使用默认令牌认证", err)
+		}
+	}
 
 	// 设置HTTP代理
 	httpTransport, err := ProxyTransport(config.HttpProxy)
@@ -733,6 +777,13 @@ func main() {
 	mux.HandleFunc("/v1/completions", handleCompletions)
 	mux.HandleFunc("/v1/embeddings", handleEmbeddings)
 	
+	// 添加Cookie管理API端点
+	if config.CookieAuth.Enabled && cookieJar != nil {
+		mux.HandleFunc("/v1/cookies", handleCookies)
+		mux.HandleFunc("/v1/cookies/add", handleAddCookie)
+		mux.HandleFunc("/v1/cookies/delete", handleDeleteCookie)
+	}
+	
 	// 创建日志记录器
 	apiLogger := log.New(os.Stdout, "[API Server] ", log.LstdFlags)
 	
@@ -744,8 +795,14 @@ func main() {
 		CORSMiddleware([]string{"*"}),
 	}
 	
-	// 如果配置了认证令牌，添加认证中间件
-	if config.AuthToken != "" {
+	// 根据配置选择认证中间件
+	if config.CookieAuth.Enabled && cookieJar != nil {
+		// 使用Cookie认证
+		log.Printf("使用Cookie认证，服务名称: %s", config.CookieAuth.ServiceName)
+		middlewares = append(middlewares, CookieAuthMiddleware(cookieJar, config.CookieAuth.ServiceName, config.CookieAuth.RequiredCookies))
+	} else if config.AuthToken != "" {
+		// 使用令牌认证
+		log.Printf("使用令牌认证")
 		middlewares = append(middlewares, AuthMiddleware(config.AuthToken))
 	}
 	

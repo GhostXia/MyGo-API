@@ -16,6 +16,12 @@
   ],
   "rate_limit": 60,
   "cache_size": 1000,
+  "cookie_auth": {
+    "enabled": false,
+    "cookie_file": "cookies.json",
+    "service_name": "default",
+    "required_cookies": ["session_id", "auth_token"]
+  },
   "cors": {
     "allowed_origins": ["*"],
     "allowed_methods": ["GET", "POST", "OPTIONS"],
