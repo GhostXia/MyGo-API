@@ -4,6 +4,31 @@
 
 这是一个通用的API反向代理模板，专为兼容OpenAI API格式设计。它可以将请求转发到其他API服务，并将响应转换为OpenAI兼容格式返回给客户端。
 
+## 项目结构
+
+```
+.
+├── config/             # 配置相关文件
+│   └── config_manager.go  # 配置管理器
+├── core/               # 核心功能
+│   ├── cookie.go          # Cookie管理
+│   ├── cookie_handlers.go # Cookie处理程序
+│   └── router.go          # 路由管理
+├── middleware/         # 中间件
+│   └── middleware.go      # 中间件实现
+├── proxy/              # 代理相关
+│   └── proxy.go           # 代理实现
+├── utils/              # 工具函数
+│   └── service_discovery.go # 服务发现
+├── My.go               # 主程序入口
+├── My-optimized.go     # 优化版本
+├── optimized.go        # 优化实现
+├── example.go          # 示例代码
+├── reference-app-test.go # 参考应用测试
+├── config.json.example # 配置文件示例
+└── README.md           # 项目说明
+```
+
 ## 主要特性
 
 - 完全兼容OpenAI API格式的请求和响应
@@ -55,6 +80,28 @@ go run My.go --config config.json
 ```bash
 go run My.go --token "your-token" --port 8080 --proxy "http://your-proxy-url"
 ```
+
+## 模块说明
+
+### config
+
+配置管理模块，负责加载、解析和监控配置文件的变化，支持配置热重载。
+
+### core
+
+核心功能模块，包含Cookie管理、路由处理等基础功能。
+
+### middleware
+
+中间件模块，提供请求处理的中间件，如认证、速率限制、日志记录等。
+
+### proxy
+
+代理模块，处理HTTP/SOCKS5代理的创建和管理。
+
+### utils
+
+工具模块，包含服务发现等辅助功能。
 
 ## API端点
 

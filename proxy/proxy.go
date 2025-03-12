@@ -6,6 +6,8 @@ import (
 	"net/http"
 	"net/url"
 	"time"
+	
+	"golang.org/x/net/proxy"
 )
 
 // ProxyTransport 创建一个支持HTTP/SOCKS5代理的http.Transport
@@ -58,12 +60,12 @@ func ProxyTransport(proxyURL string) (*http.Transport, error) {
 		}
 	case "socks5":
 		// SOCKS5代理
-		dialer, err := newSocks5Dialer(proxy)
+		dialer, err := proxy.SOCKS5("tcp", proxy.Host, nil, nil)
 		if err != nil {
 			return nil, err
 		}
 		transport = &http.Transport{
-			DialContext:           dialer.DialContext,
+			DialContext:           dialer.(proxy.ContextDialer).DialContext,
 			MaxIdleConns:          100,
 			IdleConnTimeout:       90 * time.Second,
 			TLSHandshakeTimeout:   10 * time.Second,
@@ -82,40 +84,4 @@ func ProxyTransport(proxyURL string) (*http.Transport, error) {
 	}
 
 	return transport, nil
-}
-
-// socks5Dialer 实现SOCKS5代理的拨号器
-type socks5Dialer struct {
-	proxyURL *url.URL
-	dialer   *net.Dialer
-}
-
-// newSocks5Dialer 创建一个新的SOCKS5拨号器
-func newSocks5Dialer(proxyURL *url.URL) (*socks5Dialer, error) {
-	return &socks5Dialer{
-		proxyURL: proxyURL,
-		dialer: &net.Dialer{
-			Timeout:   30 * time.Second,
-			KeepAlive: 30 * time.Second,
-		},
-	}, nil
-}
-
-// DialContext 实现SOCKS5代理的拨号
-func (d *socks5Dialer) DialContext(ctx context.Context, network, addr string) (net.Conn, error) {
-	// 连接到SOCKS5代理服务器
-	proxyAddr := d.proxyURL.Host
-	if d.proxyURL.Port() == "" {
-		proxyAddr = proxyAddr + ":1080" // 默认SOCKS5端口
-	}
-
-	conn, err := d.dialer.DialContext(ctx, "tcp", proxyAddr)
-	if err != nil {
-		return nil, err
-	}
-
-	// 这里应该实现SOCKS5协议的握手过程
-	// 由于Go标准库没有内置SOCKS5客户端，实际项目中应该使用第三方库如golang.org/x/net/proxy
-	// 这里简化处理，实际使用时应替换为完整的SOCKS5实现
-	return conn, nil
 }

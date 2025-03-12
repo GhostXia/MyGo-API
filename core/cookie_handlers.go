@@ -1,10 +1,19 @@
-package main
+package core
 
 import (
 	"encoding/json"
 	"net/http"
 	"time"
 )
+
+// authenticateRequest 统一认证中间件
+func authenticateRequest(w http.ResponseWriter, r *http.Request) bool {
+	if !config.CookieAuth.Enabled && r.Header.Get("Authorization") != "Bearer "+config.AuthToken {
+		http.Error(w, "Unauthorized", http.StatusUnauthorized)
+		return false
+	}
+	return true
+}
 
 // CookieResponse 定义Cookie API响应结构
 type CookieResponse struct {
@@ -52,9 +61,8 @@ func handleCookies(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// 认证（仅当未启用Cookie认证时检查令牌）
-	if !config.CookieAuth.Enabled && r.Header.Get("Authorization") != "Bearer "+config.AuthToken {
-		http.Error(w, "Unauthorized", http.StatusUnauthorized)
+	// 使用统一认证中间件
+	if !authenticateRequest(w, r) {
 		return
 	}
 
@@ -112,9 +120,8 @@ func handleAddCookie(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// 认证（仅当未启用Cookie认证时检查令牌）
-	if !config.CookieAuth.Enabled && r.Header.Get("Authorization") != "Bearer "+config.AuthToken {
-		http.Error(w, "Unauthorized", http.StatusUnauthorized)
+	// 使用统一认证中间件
+	if !authenticateRequest(w, r) {
 		return
 	}
 
@@ -184,9 +191,8 @@ func handleDeleteCookie(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// 认证（仅当未启用Cookie认证时检查令牌）
-	if !config.CookieAuth.Enabled && r.Header.Get("Authorization") != "Bearer "+config.AuthToken {
-		http.Error(w, "Unauthorized", http.StatusUnauthorized)
+	// 使用统一认证中间件
+	if !authenticateRequest(w, r) {
 		return
 	}
 

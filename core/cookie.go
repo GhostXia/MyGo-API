@@ -1,16 +1,19 @@
-package main
+package core
 
 import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"io/ioutil"
+	"io"
 	"net/http"
 	"os"
 	"path/filepath"
 	"sync"
 	"time"
 )
+
+// Middleware 定义了HTTP中间件函数类型
+type Middleware func(http.Handler) http.Handler
 
 // CookieJar 定义了一个Cookie管理器，用于存储和管理不同服务的Cookie
 type CookieJar struct {
@@ -43,17 +46,12 @@ func (jar *CookieJar) Load() error {
 	jar.mutex.Lock()
 	defer jar.mutex.Unlock()
 
-	data, err := ioutil.ReadFile(jar.FilePath)
+	data, err := os.ReadFile(jar.FilePath)
 	if err != nil {
 		return err
 	}
 
-	// 创建一个临时结构体用于解析JSON
-	type cookieJarFile struct {
-		Cookies     map[string][]cookieJSON `json:"cookies"`
-		LastUpdated time.Time              `json:"last_updated"`
-	}
-
+	// 使用通用的cookieJSON结构体
 	type cookieJSON struct {
 		Name       string    `json:"name"`
 		Value      string    `json:"value"`
@@ -69,7 +67,12 @@ func (jar *CookieJar) Load() error {
 		Unparsed   []string  `json:"unparsed"`
 	}
 
-	var jarFile cookieJarFile
+	// 简化的临时结构体
+	var jarFile struct {
+		Cookies     map[string][]cookieJSON `json:"cookies"`
+		LastUpdated time.Time              `json:"last_updated"`
+	}
+
 	if err := json.Unmarshal(data, &jarFile); err != nil {
 		return err
 	}
@@ -164,7 +167,7 @@ func (jar *CookieJar) Save() error {
 		return err
 	}
 
-	return ioutil.WriteFile(jar.FilePath, data, 0644)
+	return os.WriteFile(jar.FilePath, data, 0644)
 }
 
 // SetCookies 设置指定服务的Cookie
